@@ -1,0 +1,54 @@
+name: Deploy Backend Ventas
+on:
+  push:
+    branches: [ main, master ] # Revisa cómo se llama tu rama principal
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+      - name: Build and Push
+        run: |
+          # Construye la imagen usando el Dockerfile de la raíz
+          docker build -t oretnad8/back-ventas:latest .
+          docker push oretnad8/back-ventas:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to AWS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            mkdir -p ~/app-ventas
+            cd ~/app-ventas
+            echo "
+            version: '3.8'
+            services:
+              db-ventas:
+                image: mysql:8.0
+                environment:
+                  MYSQL_DATABASE: innovatech_db
+                  MYSQL_ROOT_PASSWORD: root
+                volumes:
+                  - db_data:/var/lib/mysql
+              api-ventas:
+                image: oretnad8/back-ventas:latest
+                ports:
+                  - '8080:8080'
+                depends_on:
+                  - db-ventas
+            volumes:
+              db_data:
+            " > docker-compose.yml
+            sudo docker compose pull
+            sudo docker compose up -d

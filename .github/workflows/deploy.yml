@@ -1,0 +1,33 @@
+name: Deploy Backend Ventas
+on:
+  push:
+    branches: [ main, master, deploy ]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Login Docker Hub
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+      - name: Build and Push
+        run: |
+          # El punto final indica que el Dockerfile está en la raíz de este repo
+          docker build -t oretnad8/back-ventas:latest .
+          docker push oretnad8/back-ventas:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH Deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd ~/innovatech-app
+            docker compose pull back-ventas
+            docker compose up -d back-ventas
